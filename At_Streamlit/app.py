@@ -15,7 +15,7 @@ from langchain_community.llms import ChatGroq
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 st.title("ETE PORTO DIGITAL - Sistema de Cadastro + IA")
-st.write("👋 Bem-vindo! Aqui você pode cadastrar usuários, enviar arquivos, gerar gráficos e usar inteligência artificial para gerar textos ou fazer perguntas sobre PDFs.")
+st.write("Bem-vindo! Aqui você pode cadastrar usuários, enviar arquivos, gerar gráficos e usar inteligência artificial para gerar textos ou fazer perguntas sobre PDFs.")
 
 st.sidebar.title("Menu Lateral")
 pagina = st.sidebar.radio("Escolha:", ["Cadastro", "Upload", "Gráficos", "Geração de Texto", "Leitura de PDF"])
@@ -132,3 +132,4 @@ elif pagina == "Leitura de PDF":
                 st.write(resposta)
             else:
                 st.warning("Digite uma pergunta primeiro.")
+
