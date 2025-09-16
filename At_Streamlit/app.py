@@ -2,10 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 
-import os
 os.environ["GROQ_API_KEY"] = "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"
 
-from groq import Groq
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
@@ -132,4 +130,3 @@ elif pagina == "Leitura de PDF":
                 st.write(resposta)
             else:
                 st.warning("Digite uma pergunta primeiro.")
-
