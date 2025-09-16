@@ -2,26 +2,39 @@ import streamlit as st
 import pandas as pd
 import os
 
-st.title("LINKAÊ - Sistema de Cadastro")
+import os
+os.environ["GROQ_API_KEY"] = "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"
+
+from groq import Groq
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+from langchain.chains import RetrievalQA
+from langchain.prompts import PromptTemplate
+from langchain_community.llms import ChatGroq
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+st.title("ETE PORTO DIGITAL - Sistema de Cadastro + IA")
+st.write("👋 Bem-vindo! Aqui você pode cadastrar usuários, enviar arquivos, gerar gráficos e usar inteligência artificial para gerar textos ou fazer perguntas sobre PDFs.")
 
 st.sidebar.title("Menu Lateral")
-pagina = st.sidebar.radio("Escolha:", ["Cadastro", "Upload", "Gráficos"])
+pagina = st.sidebar.radio("Escolha:", ["Cadastro", "Upload", "Gráficos", "Geração de Texto", "Leitura de PDF"])
 
 def salvar_dados(nome, email, senha):
     arquivo = 'cadastros.csv'
     if os.path.exists(arquivo):
-        df = pd.read_csv(arquivo)
+        tabela = pd.read_csv(arquivo)
     else:
-        df = pd.DataFrame(columns=['Nome', 'Email', 'Senha'])
+        tabela = pd.DataFrame(columns=['Nome', 'Email', 'Senha'])
 
-    if email in df["Email"].values:
+    if email in tabela["Email"].values:
         st.warning("Este e-mail já está cadastrado.")
         return False
 
-    df.loc[len(df)] = [nome, email, senha]
-    df.to_csv(arquivo, index=False)
+    tabela.loc[len(tabela)] = [nome, email, senha]
+    tabela.to_csv(arquivo, index=False)
     return True
-
+    
 if pagina == "Cadastro":
     st.subheader("Cadastro de Usuários")
     with st.form("form_cadastro"):
@@ -39,34 +52,83 @@ if pagina == "Cadastro":
 
     if st.checkbox("Mostrar cadastros"):
         if os.path.exists("cadastros.csv"):
-            df = pd.read_csv("cadastros.csv")
-            st.dataframe(df)
+            tabela = pd.read_csv("cadastros.csv")
+            st.dataframe(tabela)
         else:
             st.info("Nenhum cadastro encontrado.")
 
 elif pagina == "Upload":
     st.subheader("Upload de Arquivos")
-    arquivo = st.file_uploader("Envie um arquivo CSV", type="csv")
-    if arquivo is not None:
-        df = pd.read_csv(arquivo)
-        st.dataframe(df)
+    arquivo_csv = st.file_uploader("Envie um arquivo CSV", type="csv")
+    if arquivo_csv is not None:
+        tabela = pd.read_csv(arquivo_csv)
+        st.dataframe(tabela)
 
-else:
+elif pagina == "Gráficos":
     st.subheader("Gráficos de Usuários")
 
     if os.path.exists("cadastros.csv"):
-        df = pd.read_csv("cadastros.csv")
+        tabela = pd.read_csv("cadastros.csv")
 
-        if not df.empty:
-            df["Dominio"] = df["Email"].apply(lambda x: x.split("@")[-1])
-
-            dominios = df["Dominio"].value_counts()
+        if not tabela.empty:
+            tabela["Dominio"] = tabela["Email"].apply(lambda x: x.split("@")[-1])
+            dominios = tabela["Dominio"].value_counts()
 
             st.bar_chart(dominios)
-
             st.write("Quantidade de usuários por domínio de e-mail:")
             st.dataframe(dominios)
         else:
             st.info("Ainda não há usuários cadastrados para gerar gráficos.")
     else:
         st.info("Nenhum cadastro encontrado para gerar gráficos.")
+
+elif pagina == "Geração de Texto":
+    st.subheader("📝 Geração de Texto com IA")
+    prompt_usuario = st.text_area("Digite um prompt para gerar texto:")
+    if st.button("Gerar Texto"):
+        if prompt_usuario:
+            st.info("Gerando texto... aguarde ⏳")
+            modelo = ChatGroq(model="llama3-8b-8192", temperature=0.7)
+            resposta = modelo.invoke(prompt_usuario)
+            st.success("Texto gerado com sucesso!")
+            st.write("**Resposta da IA:**")
+            st.write(resposta)
+        else:
+            st.warning("Digite um prompt primeiro.")
+
+elif pagina == "Leitura de PDF":
+    st.subheader("📄 Leitura de PDF com IA (RAG)")
+    pdf_file = st.file_uploader("Envie um PDF", type="pdf")
+    if pdf_file:
+        with open("temp.pdf", "wb") as f:
+            f.write(pdf_file.read())
+
+        st.info("Carregando e processando PDF...")
+        carregador = PyPDFLoader("temp.pdf")
+        documentos = carregador.load()
+
+        separador = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
+        blocos = separador.split_documents(documentos)
+        print(f"DEBUG: {len(blocos)} blocos de texto gerados do PDF.")
+
+        embeddings = OpenAIEmbeddings()
+        armazenamento_vetorial = FAISS.from_documents(blocos, embeddings)
+        buscador = armazenamento_vetorial.as_retriever(search_kwargs={"k": 3})
+
+        modelo = ChatGroq(model="llama3-8b-8192", temperature=0)
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=modelo,
+            retriever=buscador,
+            chain_type="stuff",
+        )
+
+        pergunta = st.text_input("Faça uma pergunta sobre o PDF:")
+        if st.button("Perguntar"):
+            if pergunta:
+                st.info("Consultando IA... aguarde ⏳")
+                resposta = qa_chain.run(pergunta)
+                st.success("Resposta encontrada!")
+                st.write("**Resposta da IA:**")
+                st.write(resposta)
+            else:
+                st.warning("Digite uma pergunta primeiro.")
