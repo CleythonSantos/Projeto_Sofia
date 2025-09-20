@@ -1,143 +1,211 @@
 import streamlit as st
+import sqlite3
 import pandas as pd
-import os
+import plotly.express as px
+from datetime import datetime
+from groq import Groq
+from pypdf import PdfReader
 
-# Defina sua chave de API da Groq
-os.environ["GROQ_API_KEY"] = "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"
+# Configurações iniciais
+st.set_page_config(page_title="ETE PD - Sistema de Cadastro + IA", layout="wide")
 
-# Import corrigido
-from langchain_community.document_loaders.pdf import PyPDFLoader
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.chains import RetrievalQA
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_groq import ChatGroq
-from langchain.schema import HumanMessage
+# Banco de dados SQLite
+def init_db():
+    conn = sqlite3.connect("educaia.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            email TEXT NOT NULL,
+            senha TEXT NOT NULL,
+            data_cadastro TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-st.set_page_config(page_title="ETE PORTO DIGITAL - Sistema IA", layout="wide")
-st.title("ETE PORTO DIGITAL - Sistema de Cadastro + IA")
-st.write("Bem-vindo! Aqui você pode cadastrar usuários, enviar arquivos, gerar gráficos e usar inteligência artificial para gerar textos ou fazer perguntas sobre PDFs.")
+def add_usuario(nome, email, senha):
+    conn = sqlite3.connect("educaia.db")
+    cursor = conn.cursor()
+    data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("INSERT INTO usuarios (nome, email, senha, data_cadastro) VALUES (?, ?, ?, ?)", 
+                   (nome, email, senha, data))
+    conn.commit()
+    conn.close()
+
+def get_usuarios():
+    conn = sqlite3.connect("educaia.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM usuarios")
+    usuarios = cursor.fetchall()
+    conn.close()
+    return usuarios
+
+# Inicializa o banco
+init_db()
 
 # Menu lateral
-st.sidebar.title("Menu Lateral")
-pagina = st.sidebar.radio("Escolha:", ["Cadastro", "Upload", "Gráficos", "Geração de Texto", "Leitura de PDF"])
+menu = st.sidebar.radio("Escolha:", ["Cadastro", "Upload", "Gráficos", "Geração de Texto", "Leitura de PDF"])
 
-# Função para salvar dados
-def salvar_dados(nome, email, senha):
-    arquivo = 'cadastros.csv'
-    if os.path.exists(arquivo):
-        tabela = pd.read_csv(arquivo)
-    else:
-        tabela = pd.DataFrame(columns=['Nome', 'Email', 'Senha'])
+# Cabeçalho geral
+st.markdown("<h1 style='text-align: center;'>ETE PD - Sistema de Cadastro + IA</h1>", unsafe_allow_html=True)
+st.write("Bem-vindo! Aqui você pode cadastrar usuários, enviar arquivos, gerar gráficos e usar inteligência artificial para gerar textos ou interagir com PDFs.")
 
-    if email in tabela["Email"].values:
-        st.warning("Este e-mail já está cadastrado.")
-        return False
+# Página 1 - Cadastro
+if menu == "Cadastro":
+    st.markdown("## Cadastro de Usuários")
 
-    tabela.loc[len(tabela)] = [nome, email, senha]
-    tabela.to_csv(arquivo, index=False)
-    return True
+    nome = st.text_input("Nome")
+    email = st.text_input("Email")
+    senha = st.text_input("Senha", type="password")
 
-# ------------------ PÁGINAS ------------------
-
-# CADASTRO
-if pagina == "Cadastro":
-    st.subheader("Cadastro de Usuários")
-    with st.form("form_cadastro"):
-        nome = st.text_input("Nome")
-        email = st.text_input("Email")
-        senha = st.text_input("Senha", type="password")
-        botao = st.form_submit_button("Cadastrar")
-
-    if botao:
+    if st.button("Cadastrar"):
         if nome and email and senha:
-            if salvar_dados(nome, email, senha):
-                st.success("Cadastro realizado com sucesso!")
+            add_usuario(nome, email, senha)
+            st.success("Cadastro realizado com sucesso!")
         else:
-            st.error("Por favor, preencha todos os campos.")
+            st.warning("Preencha todos os campos antes de cadastrar.")
 
     if st.checkbox("Mostrar cadastros"):
-        if os.path.exists("cadastros.csv"):
-            tabela = pd.read_csv("cadastros.csv")
-            st.dataframe(tabela)
+        usuarios = get_usuarios()
+        if usuarios:
+            df = pd.DataFrame(usuarios, columns=["ID", "Nome", "Email", "Senha", "Data Cadastro"])
+            st.dataframe(df)
+            st.download_button("Baixar usuários em CSV", df.to_csv(index=False), "usuarios.csv", "text/csv")
         else:
-            st.info("Nenhum cadastro encontrado.")
+            st.info("Nenhum usuário cadastrado.")
 
-# UPLOAD
-elif pagina == "Upload":
-    st.subheader("Upload de Arquivos")
-    arquivo_csv = st.file_uploader("Envie um arquivo CSV", type="csv")
-    if arquivo_csv is not None:
-        tabela = pd.read_csv(arquivo_csv)
-        st.dataframe(tabela)
+# Página 2 - Upload
+elif menu == "Upload":
+    st.markdown("## Upload de Arquivos")
 
-# GRÁFICOS
-elif pagina == "Gráficos":
-    st.subheader("Gráficos de Usuários")
-    if os.path.exists("cadastros.csv"):
-        tabela = pd.read_csv("cadastros.csv")
-        if not tabela.empty:
-            tabela["Dominio"] = tabela["Email"].apply(lambda x: x.split("@")[-1])
-            dominios = tabela["Dominio"].value_counts()
-            st.bar_chart(dominios)
-            st.write("Quantidade de usuários por domínio de e-mail:")
-            st.dataframe(dominios)
-        else:
-            st.info("Ainda não há usuários cadastrados para gerar gráficos.")
+    uploaded_file = st.file_uploader("Envie um arquivo CSV", type=["csv"])
+    if uploaded_file is not None:
+        df_upload = pd.read_csv(uploaded_file)
+        st.success(f"Arquivo {uploaded_file.name} carregado com sucesso!")
+        st.dataframe(df_upload)
+
+# Página 3 - Gráficos
+elif menu == "Gráficos":
+    st.markdown("## Gráficos de Usuários")
+
+    usuarios = get_usuarios()
+    if usuarios:
+        df = pd.DataFrame(usuarios, columns=["ID", "Nome", "Email", "Senha", "Data Cadastro"])
+
+        # Cards principais
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total de Usuários", len(df))
+        col2.metric("Último Cadastro", df["Data Cadastro"].max())
+        col3.metric("Domínios de Email", df["Email"].str.split("@").str[1].nunique())
+
+        # Gráfico de usuários por domínio de email
+        df["Dominio"] = df["Email"].str.split("@").str[1]
+        dominio_count = df["Dominio"].value_counts().reset_index()
+        dominio_count.columns = ["Dominio", "Quantidade"]
+
+        fig1 = px.bar(dominio_count, x="Dominio", y="Quantidade", title="Usuários por domínio de e-mail", text="Quantidade")
+        st.plotly_chart(fig1, use_container_width=True)
+
+        # Gráfico de evolução dos cadastros ao longo do tempo
+        df["Data Cadastro"] = pd.to_datetime(df["Data Cadastro"])
+        cadastros_por_dia = df.groupby(df["Data Cadastro"].dt.date).size().reset_index(name="Quantidade")
+
+        fig2 = px.line(cadastros_por_dia, x="Data Cadastro", y="Quantidade", markers=True, title="Evolução de cadastros")
+        st.plotly_chart(fig2, use_container_width=True)
+
     else:
-        st.info("Nenhum cadastro encontrado para gerar gráficos.")
+        st.info("Nenhum dado disponível para gerar gráficos.")
 
-# GERAÇÃO DE TEXTO
-elif pagina == "Geração de Texto":
-    st.subheader("📝 Geração de Texto com IA")
-    prompt_usuario = st.text_area("Digite um prompt para gerar texto:")
+# Página 4 - Geração de Texto com IA
+elif menu == "Geração de Texto":
+    st.markdown("## Geração de Textos com IA")
+
+    chave = st.text_input("Digite sua chave da Groq", type="password")
+    modelo = st.selectbox("Escolha o modelo", [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768"
+    ])
+    titulo = st.text_input("Título do Texto")
+    tema = st.text_area("Tema/Assunto")
+
     if st.button("Gerar Texto"):
-        if prompt_usuario:
-            st.info("Gerando texto... aguarde ⏳")
-            modelo = ChatGroq(model="llama2-7b-8192", temperature=0.7)
-            # ✅ Usando predict() com HumanMessage
-            resposta = modelo.predict([HumanMessage(content=prompt_usuario)])
-            st.success("Texto gerado com sucesso!")
-            st.write("**Resposta da IA:**")
-            st.write(resposta)
+        if chave and tema:
+            try:
+                client = Groq(api_key=chave)
+
+                resposta = client.chat.completions.create(
+                    model=modelo,
+                    messages=[
+                        {"role": "system", "content": "Você é um assistente que escreve textos claros e bem estruturados."},
+                        {"role": "user", "content": f"Escreva um texto sobre: {tema}"}
+                    ],
+                    max_tokens=600
+                )
+
+                texto_final = resposta.choices[0].message.content
+
+                st.success("Texto gerado com sucesso!")
+                st.write(f"Título: {titulo if titulo else 'Sem título'}")
+                st.markdown("---")
+                st.write(texto_final)
+
+                st.download_button("Baixar Texto", texto_final, "texto_gerado.txt")
+
+            except Exception as e:
+                st.error(f"Erro ao gerar texto: {e}")
         else:
-            st.warning("Digite um prompt primeiro.")
+            st.warning("Preencha todos os campos antes de gerar o texto.")
 
-# LEITURA DE PDF (RAG)
-elif pagina == "Leitura de PDF":
-    st.subheader("📄 Leitura de PDF com IA (RAG)")
-    pdf_file = st.file_uploader("Envie um PDF", type="pdf")
-    if pdf_file:
-        with open("temp.pdf", "wb") as f:
-            f.write(pdf_file.read())
+# Página 5 - Leitura de PDF com IA
+elif menu == "Leitura de PDF":
+    st.markdown("## Leitura de PDF com IA")
 
-        st.info("Carregando e processando PDF...")
-        carregador = PyPDFLoader("temp.pdf")
-        documentos = carregador.load()
+    chave = st.text_input("Digite sua chave da Groq", type="password")
+    modelo = st.selectbox("Escolha o modelo", [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768"
+    ])
 
-        separador = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
-        blocos = separador.split_documents(documentos)
-        st.write(f"PDF dividido em {len(blocos)} blocos de texto.")
+    uploaded_file = st.file_uploader("Envie um PDF", type=["pdf"])
 
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        armazenamento_vetorial = FAISS.from_documents(blocos, embeddings)
-        buscador = armazenamento_vetorial.as_retriever(search_kwargs={"k": 3})
+    if uploaded_file is not None:
+        st.success(f"Arquivo {uploaded_file.name} carregado com sucesso!")
 
-        modelo = ChatGroq(model="llama2-7b-8192", temperature=0)
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=modelo,
-            retriever=buscador,
-            chain_type="stuff",
-            return_source_documents=True
-        )
+        # Ler texto do PDF
+        pdf_reader = PdfReader(uploaded_file)
+        texto_pdf = ""
+        for page in pdf_reader.pages:
+            texto_pdf += page.extract_text() + "\n"
 
-        pergunta = st.text_input("Faça uma pergunta sobre o PDF:")
-        if st.button("Perguntar PDF"):
-            if pergunta:
-                st.info("Consultando IA... aguarde ⏳")
-                resposta = qa_chain.run(pergunta)
-                st.success("Resposta encontrada!")
-                st.write("**Resposta da IA:**")
-                st.write(resposta)
+        st.subheader("Pré-visualização do Conteúdo")
+        st.text_area("Texto extraído do PDF:", texto_pdf[:2000], height=200)
+
+        pergunta = st.text_input("Digite uma pergunta sobre o PDF")
+
+        if st.button("Perguntar à IA"):
+            if chave and pergunta:
+                try:
+                    client = Groq(api_key=chave)
+
+                    resposta = client.chat.completions.create(
+                        model=modelo,
+                        messages=[
+                            {"role": "system", "content": "Você é um assistente especializado em responder perguntas sobre documentos PDF."},
+                            {"role": "user", "content": f"Documento:\n{texto_pdf[:4000]}"},
+                            {"role": "user", "content": f"Pergunta: {pergunta}"}
+                        ],
+                        max_tokens=500
+                    )
+
+                    resposta_final = resposta.choices[0].message.content
+                    st.markdown("### Resposta da IA:")
+                    st.write(resposta_final)
+
+                except Exception as e:
+                    st.error(f"Erro ao processar pergunta: {e}")
             else:
-                st.warning("Digite uma pergunta primeiro.")
+                st.warning("Digite sua chave da Groq e uma pergunta antes de continuar.")
