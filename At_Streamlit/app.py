@@ -5,13 +5,14 @@ import os
 # Defina sua chave de API da Groq
 os.environ["GROQ_API_KEY"] = "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"
 
-# ✅ Import corrigido para PyPDFLoader
+# Import corrigido
 from langchain_community.document_loaders.pdf import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
+from langchain.schema import HumanMessage
 
 st.set_page_config(page_title="ETE PORTO DIGITAL - Sistema IA", layout="wide")
 st.title("ETE PORTO DIGITAL - Sistema de Cadastro + IA")
@@ -93,8 +94,9 @@ elif pagina == "Geração de Texto":
     if st.button("Gerar Texto"):
         if prompt_usuario:
             st.info("Gerando texto... aguarde ⏳")
-            modelo = ChatGroq(model="llama3-8b-8192", temperature=0.7)
-            resposta = modelo.invoke(prompt_usuario)
+            modelo = ChatGroq(model="llama2-7b-8192", temperature=0.7)
+            # ✅ Usando predict() com HumanMessage
+            resposta = modelo.predict([HumanMessage(content=prompt_usuario)])
             st.success("Texto gerado com sucesso!")
             st.write("**Resposta da IA:**")
             st.write(resposta)
@@ -121,11 +123,12 @@ elif pagina == "Leitura de PDF":
         armazenamento_vetorial = FAISS.from_documents(blocos, embeddings)
         buscador = armazenamento_vetorial.as_retriever(search_kwargs={"k": 3})
 
-        modelo = ChatGroq(model="llama3-8b-8192", temperature=0)
+        modelo = ChatGroq(model="llama2-7b-8192", temperature=0)
         qa_chain = RetrievalQA.from_chain_type(
             llm=modelo,
             retriever=buscador,
             chain_type="stuff",
+            return_source_documents=True
         )
 
         pergunta = st.text_input("Faça uma pergunta sobre o PDF:")
