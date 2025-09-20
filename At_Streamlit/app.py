@@ -5,20 +5,23 @@ import os
 # Defina sua chave de API da Groq
 os.environ["GROQ_API_KEY"] = "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"
 
-from langchain_community.document_loaders import PyPDFLoader
+# ✅ Import corrigido para PyPDFLoader
+from langchain_community.document_loaders.pdf import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
-from langchain_groq import ChatGroq 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_groq import ChatGroq
 
+st.set_page_config(page_title="ETE PORTO DIGITAL - Sistema IA", layout="wide")
 st.title("ETE PORTO DIGITAL - Sistema de Cadastro + IA")
 st.write("Bem-vindo! Aqui você pode cadastrar usuários, enviar arquivos, gerar gráficos e usar inteligência artificial para gerar textos ou fazer perguntas sobre PDFs.")
 
+# Menu lateral
 st.sidebar.title("Menu Lateral")
 pagina = st.sidebar.radio("Escolha:", ["Cadastro", "Upload", "Gráficos", "Geração de Texto", "Leitura de PDF"])
 
+# Função para salvar dados
 def salvar_dados(nome, email, senha):
     arquivo = 'cadastros.csv'
     if os.path.exists(arquivo):
@@ -33,7 +36,10 @@ def salvar_dados(nome, email, senha):
     tabela.loc[len(tabela)] = [nome, email, senha]
     tabela.to_csv(arquivo, index=False)
     return True
-    
+
+# ------------------ PÁGINAS ------------------
+
+# CADASTRO
 if pagina == "Cadastro":
     st.subheader("Cadastro de Usuários")
     with st.form("form_cadastro"):
@@ -56,6 +62,7 @@ if pagina == "Cadastro":
         else:
             st.info("Nenhum cadastro encontrado.")
 
+# UPLOAD
 elif pagina == "Upload":
     st.subheader("Upload de Arquivos")
     arquivo_csv = st.file_uploader("Envie um arquivo CSV", type="csv")
@@ -63,16 +70,14 @@ elif pagina == "Upload":
         tabela = pd.read_csv(arquivo_csv)
         st.dataframe(tabela)
 
+# GRÁFICOS
 elif pagina == "Gráficos":
     st.subheader("Gráficos de Usuários")
-
     if os.path.exists("cadastros.csv"):
         tabela = pd.read_csv("cadastros.csv")
-
         if not tabela.empty:
             tabela["Dominio"] = tabela["Email"].apply(lambda x: x.split("@")[-1])
             dominios = tabela["Dominio"].value_counts()
-
             st.bar_chart(dominios)
             st.write("Quantidade de usuários por domínio de e-mail:")
             st.dataframe(dominios)
@@ -81,6 +86,7 @@ elif pagina == "Gráficos":
     else:
         st.info("Nenhum cadastro encontrado para gerar gráficos.")
 
+# GERAÇÃO DE TEXTO
 elif pagina == "Geração de Texto":
     st.subheader("📝 Geração de Texto com IA")
     prompt_usuario = st.text_area("Digite um prompt para gerar texto:")
@@ -95,6 +101,7 @@ elif pagina == "Geração de Texto":
         else:
             st.warning("Digite um prompt primeiro.")
 
+# LEITURA DE PDF (RAG)
 elif pagina == "Leitura de PDF":
     st.subheader("📄 Leitura de PDF com IA (RAG)")
     pdf_file = st.file_uploader("Envie um PDF", type="pdf")
@@ -122,7 +129,7 @@ elif pagina == "Leitura de PDF":
         )
 
         pergunta = st.text_input("Faça uma pergunta sobre o PDF:")
-        if st.button("Perguntar"):
+        if st.button("Perguntar PDF"):
             if pergunta:
                 st.info("Consultando IA... aguarde ⏳")
                 resposta = qa_chain.run(pergunta)
@@ -131,4 +138,3 @@ elif pagina == "Leitura de PDF":
                 st.write(resposta)
             else:
                 st.warning("Digite uma pergunta primeiro.")
-
