@@ -2,14 +2,15 @@ import streamlit as st
 import pandas as pd
 import os
 
+# Defina sua chave de API da Groq
 os.environ["GROQ_API_KEY"] = "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"
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain_community.llms import ChatGroq
+from langchain_groq import ChatGroq 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 st.title("ETE PORTO DIGITAL - Sistema de Cadastro + IA")
@@ -107,9 +108,9 @@ elif pagina == "Leitura de PDF":
 
         separador = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
         blocos = separador.split_documents(documentos)
-        print(f"DEBUG: {len(blocos)} blocos de texto gerados do PDF.")
+        st.write(f"PDF dividido em {len(blocos)} blocos de texto.")
 
-        embeddings = OpenAIEmbeddings()
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         armazenamento_vetorial = FAISS.from_documents(blocos, embeddings)
         buscador = armazenamento_vetorial.as_retriever(search_kwargs={"k": 3})
 
