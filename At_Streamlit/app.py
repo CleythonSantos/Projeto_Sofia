@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 # Defina sua chave de API da Groq
-os.environ["GROQ_API_KEY"] = "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"
+os.environ["GROQ_API_KEY"] = "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"
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
@@ -131,3 +131,4 @@ elif pagina == "Leitura de PDF":
                 st.write(resposta)
             else:
                 st.warning("Digite uma pergunta primeiro.")
+
