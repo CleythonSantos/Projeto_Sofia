@@ -147,7 +147,7 @@ def area_logada():
     # Aqui entram todos os menus: Dashboard, Cadastro, Upload, Geração de Texto, Leitura de PDF
 
 # EXECUÇÃO PRINCIPAL
-  if st.session_state.page == "Login":
+if st.session_state.page == "Login":
     if st.session_state.logged_in:
         st.session_state.page = "Dashboard"
         area_logada()
@@ -157,3 +157,4 @@ elif st.session_state.page == "Cadastro":
     pagina_cadastro()
 else:
     area_logada()
+
