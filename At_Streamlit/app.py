@@ -123,7 +123,7 @@ def pagina_cadastro():
         st.stop()
 
 # ÁREA LOGADA
-    def area_logada():
+def area_logada():
     st.sidebar.markdown("<h2 style='text-align:center; color:#2C3E50;'>🔹 Menu</h2>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
     if st.sidebar.button("🚪 Sair"):
