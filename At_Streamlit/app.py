@@ -23,30 +23,20 @@ def init_db():
             nome TEXT NOT NULL,
             email TEXT NOT NULL UNIQUE,
             senha TEXT NOT NULL,
-            data_cadastro TEXT NOT NULL
+            data_cadastro TEXT NOT NULL,
+            role TEXT DEFAULT 'aluno'
         )
     """)
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN role TEXT DEFAULT 'aluno'")
-    except sqlite3.OperationalError:
-        pass  # coluna já existe
-
-    # Usuário admin padrão
-    cursor.execute("SELECT * FROM usuarios WHERE email='admin@test.com'")
-    if not cursor.fetchall():
-        data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("INSERT INTO usuarios (nome,email,senha,role,data_cadastro) VALUES (?, ?, ?, ?, ?)",
-                       ("Admin Test", "admin@test.com", "admin123", "admin", data))
     conn.commit()
     conn.close()
 
-def add_usuario(nome, email, senha, role="aluno"):
+def add_usuario(nome, email, senha):
     conn = sqlite3.connect("educaia.db")
     cursor = conn.cursor()
     data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        cursor.execute("INSERT INTO usuarios (nome,email,senha,role,data_cadastro) VALUES (?, ?, ?, ?, ?)",
-                       (nome, email, senha, role, data))
+        cursor.execute("INSERT INTO usuarios (nome,email,senha,data_cadastro,role) VALUES (?, ?, ?, ?, 'aluno')",
+                       (nome, email, senha, data))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -62,14 +52,6 @@ def get_usuario_por_email(email):
     conn.close()
     return usuario
 
-def get_usuarios():
-    conn = sqlite3.connect("educaia.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM usuarios")
-    usuarios = cursor.fetchall()
-    conn.close()
-    return usuarios
-
 # Inicializar DB
 init_db()
 
@@ -79,7 +61,6 @@ init_db()
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_name = ""
-    st.session_state.role = ""
     st.session_state.email = ""
     st.session_state.page = "Login"
 
@@ -95,13 +76,16 @@ def pagina_login():
         if usuario and usuario[3] == senha:
             st.session_state.logged_in = True
             st.session_state.user_name = usuario[1]
-            st.session_state.role = usuario[4]
             st.session_state.email = usuario[2]
-            st.success(f"Bem-vindo(a), {usuario[1]}!")
             st.session_state.page = "Dashboard"
-            st.experimental_rerun()
+            st.success(f"Bem-vindo(a), {usuario[1]}!")
+            st.stop()
         else:
             st.error("Email ou senha incorretos.")
+    st.markdown("---")
+    if st.button("Não tem conta? Cadastre-se"):
+        st.session_state.page = "Cadastro"
+        st.stop()
 
 # -----------------------------
 # PAGINA CADASTRO
@@ -111,16 +95,21 @@ def pagina_cadastro():
     nome = st.text_input("Nome")
     email = st.text_input("Email")
     senha = st.text_input("Senha", type="password")
-    role = st.selectbox("Tipo de usuário", ["aluno", "admin"])
     if st.button("Cadastrar"):
         if nome and email and senha:
-            sucesso = add_usuario(nome, email, senha, role)
+            sucesso = add_usuario(nome, email, senha)
             if sucesso:
-                st.success(f"Usuário {nome} cadastrado com sucesso como {role}!")
+                st.success(f"Usuário {nome} cadastrado com sucesso como aluno!")
+                st.session_state.page = "Login"
+                st.stop()
             else:
                 st.error("Email já cadastrado. Tente outro.")
         else:
             st.warning("Preencha todos os campos.")
+    st.markdown("---")
+    if st.button("Voltar para Login"):
+        st.session_state.page = "Login"
+        st.stop()
 
 # -----------------------------
 # ÁREA LOGADA
@@ -128,22 +117,16 @@ def pagina_cadastro():
 def area_logada():
     st.sidebar.markdown("<h2 style='text-align:center; color:#2C3E50;'>🔹 Menu</h2>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
-    
     if st.sidebar.button("🚪 Sair"):
         st.session_state.logged_in = False
         st.session_state.user_name = ""
-        st.session_state.role = ""
         st.session_state.email = ""
         st.session_state.page = "Login"
         st.success("Você saiu da conta com sucesso!")
         st.stop()
 
-    # Menu por função
-    if st.session_state.role == "admin":
-        opcoes_menu = ["🏠 Dashboard", "📝 Cadastro", "📂 Upload", "🖋️ Geração de Texto", "📄 Leitura de PDF"]
-    else:
-        opcoes_menu = ["🏠 Dashboard", "📂 Upload", "🖋️ Geração de Texto", "📄 Leitura de PDF"]
-
+    # Menu fixo para aluno
+    opcoes_menu = ["🏠 Dashboard", "📂 Upload", "🖋️ Geração de Texto", "📄 Leitura de PDF"]
     menu = st.sidebar.radio("Navegação", opcoes_menu, index=0)
     st.markdown(f"<h1 style='text-align:center; color:#2C3E50;'>🔹 Bem-vindo(a), {st.session_state.user_name}</h1>", unsafe_allow_html=True)
 
@@ -151,50 +134,21 @@ def area_logada():
     # DASHBOARD
     # -----------------------------
     if menu == "🏠 Dashboard":
-        if st.session_state.role == "admin":
-            st.markdown("## 📊 Dashboard Admin")
-            usuarios = get_usuarios()
-            if usuarios:
-                df = pd.DataFrame(usuarios, columns=["ID", "Nome", "Email", "Senha", "Role", "Data Cadastro"])
-                df["Data Cadastro"] = pd.to_datetime(df["Data Cadastro"])
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total de Usuários", len(df))
-                col2.metric("Último Cadastro", df["Data Cadastro"].max().strftime("%d/%m/%Y %H:%M:%S"))
-                col3.metric("Domínios de Email", df["Email"].str.split('@').str[1].nunique())
-                
-                df["Dominio"] = df["Email"].str.split("@").str[1]
-                dominio_count = df["Dominio"].value_counts().reset_index()
-                dominio_count.columns = ["Dominio", "Quantidade"]
-                fig = px.bar(dominio_count, x="Dominio", y="Quantidade", title="Usuários por domínio de email",
-                             text="Quantidade", color_discrete_sequence=["#1f77b4"])
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Nenhum usuário cadastrado ainda.")
-        else:
-            st.markdown("## 📊 Dashboard de Estudos - Progresso Visual")
-            materias = ["Matemática", "Português", "História", "Geografia", "Informática"]
-            total_conteudos = [10, 8, 7, 5, 6]
-            concluido = [6, 5, 7, 2, 4]
-            porcentagem = [int(c/t*100) if t !=0 else 0 for c,t in zip(concluido, total_conteudos)]
-            a_estudar = [t-c for t,c in zip(total_conteudos, concluido)]
-            st.markdown("### 📝 Progresso por Matéria")
-            cols = st.columns(len(materias))
-            for i, col in enumerate(cols):
-                col.metric(label=materias[i], value=f"{porcentagem[i]}%", delta=f"{concluido[i]}/{total_conteudos[i]} concluídos")
-            df_prog = pd.DataFrame({"Matéria": materias, "Concluído": concluido, "A Estudar": a_estudar})
-            fig_prog = px.bar(df_prog, x="Matéria", y=["Concluído", "A Estudar"], text_auto=True,
-                              labels={"value": "Conteúdos", "variable": "Status"},
-                              color_discrete_sequence=["#2ca02c", "#ff7f0e"], title="📊 Progresso por Matéria")
-            st.plotly_chart(fig_prog, use_container_width=True)
-
-    # -----------------------------
-    # CADASTRO
-    # -----------------------------
-    elif menu == "📝 Cadastro":
-        if st.session_state.role != "admin":
-            st.error("🚫 Apenas administradores podem acessar esta área.")
-        else:
-            pagina_cadastro()
+        st.markdown("## 📊 Dashboard de Estudos - Progresso Visual")
+        materias = ["Matemática", "Português", "História", "Geografia", "Informática"]
+        total_conteudos = [10, 8, 7, 5, 6]
+        concluido = [6, 5, 7, 2, 4]
+        porcentagem = [int(c/t*100) if t !=0 else 0 for c,t in zip(concluido, total_conteudos)]
+        a_estudar = [t-c for t,c in zip(total_conteudos, concluido)]
+        st.markdown("### 📝 Progresso por Matéria")
+        cols = st.columns(len(materias))
+        for i, col in enumerate(cols):
+            col.metric(label=materias[i], value=f"{porcentagem[i]}%", delta=f"{concluido[i]}/{total_conteudos[i]} concluídos")
+        df_prog = pd.DataFrame({"Matéria": materias, "Concluído": concluido, "A Estudar": a_estudar})
+        fig_prog = px.bar(df_prog, x="Matéria", y=["Concluído", "A Estudar"], text_auto=True,
+                          labels={"value": "Conteúdos", "variable": "Status"},
+                          color_discrete_sequence=["#2ca02c", "#ff7f0e"], title="📊 Progresso por Matéria")
+        st.plotly_chart(fig_prog, use_container_width=True)
 
     # -----------------------------
     # UPLOAD
@@ -280,7 +234,13 @@ def area_logada():
 # -----------------------------
 # EXECUÇÃO PRINCIPAL
 # -----------------------------
-if st.session_state.logged_in:
-    area_logada()
+if st.session_state.page == "Login":
+    if st.session_state.logged_in:
+        st.session_state.page = "Dashboard"
+        area_logada()
+    else:
+        pagina_login()
+elif st.session_state.page == "Cadastro":
+    pagina_cadastro()
 else:
-    pagina_login()
+    area_logada()
