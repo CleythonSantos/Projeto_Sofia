@@ -8,7 +8,7 @@ Nesse Projeto, "Sofia - Compet Médio", como minha certificação de aprendizado
 
 ---
 
-#EducaIA - Plataforma Concurseiro com IA
+##EducaIA - Plataforma Concurseiro com IA
 
 O **EducaIA** é um projeto em Python utilizando **Streamlit** para criar um sistema interativo de apoio a concurseiros, integrado com **IA generativa via Groq**. O sistema permite:
 
@@ -89,7 +89,11 @@ python.exe -m pip install --upgrade pip
 4. Instalar as dependências:
 
 ```bash
-pip install load_dotenv streamlit langchain openai pandas PyPDF2 faiss-cpu tiktoken openpyxl langchain-groq langchain-community
+pip install streamlit
+pandas
+plotly
+groq
+pypdf
 ```
 
 5. Gerar `requirements.txt` (opcional):
