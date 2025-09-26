@@ -8,7 +8,7 @@ Nesse Projeto, "Sofia - Compet Médio", como minha certificação de aprendizado
 
 ---
 
-##EducaIA - Plataforma Concurseiro com IA
+## 📚 EducaIA - Plataforma Concurseiro com IA
 
 O **EducaIA** é um projeto em Python utilizando **Streamlit** para criar um sistema interativo de apoio a concurseiros, integrado com **IA generativa via Groq**. O sistema permite:
 
